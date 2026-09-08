@@ -1,0 +1,11 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=YOUR_SERVER;User Id=YOUR_USER;Password=YOUR_PASSWORD;Database=DrugExplorer;Encrypt=false;TrustServerCertificate=true;"
+  }
+}

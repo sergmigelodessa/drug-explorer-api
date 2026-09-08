@@ -1,0 +1,27 @@
+## .NET
+bin/
+obj/
+out/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+
+## Rider / VS Code
+.idea/
+*.userprefs
+
+## Test results
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+
+## Local secrets - do not commit real connection strings/keys here
+appsettings.Development.json
+appsettings.*.local.json
+*.env
+
+## OS
+.DS_Store
+Thumbs.db
