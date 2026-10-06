@@ -82,9 +82,10 @@ builder.Services.AddScoped<IDrugNormalizationService, DrugNormalizationService>(
 builder.Services.AddScoped<IDrugGroupingService, DrugGroupingService>();
 builder.Services.AddScoped<IDrugSearchService, DrugSearchService>();
 builder.Services.AddScoped<IOpenFdaMapper, OpenFdaMapper>();
-builder.Services.AddScoped<IDrugSearchHistoryRepository, DrugSearchHistoryRepository>();
 builder.Services.AddScoped<IDrugEmbeddingRepository, DrugEmbeddingRepository>();
+builder.Services.AddScoped<IMedicamentRepository, MedicamentRepo>();
 builder.Services.AddScoped<IDrugKnowledgeIngestionService, DrugKnowledgeIngestionService>();
+builder.Services.AddScoped<IMedicamentSeedService, MedicamentSeedService>();
 builder.Services.AddSingleton<IVectorStore, InMemoryVectorStore>();
 builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>();
 builder.Services.AddScoped<IRagAnswerService, RagAnswerService>();

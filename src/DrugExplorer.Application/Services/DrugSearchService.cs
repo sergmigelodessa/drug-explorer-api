@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,7 +16,6 @@ public class DrugSearchService : IDrugSearchService
     private readonly IMemoryCache _cache;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DrugSearchService> _logger;
-    private readonly IDrugSearchHistoryRepository? _historyRepository;
     private readonly IServiceScopeFactory _scopeFactory;
 
     private const string CACHE_KEY_PREFIX = "drug_search_";
@@ -31,8 +29,7 @@ public class DrugSearchService : IDrugSearchService
         IMemoryCache cache,
         IConfiguration configuration,
         ILogger<DrugSearchService> logger,
-        IServiceScopeFactory scopeFactory,
-        IDrugSearchHistoryRepository? historyRepository = null)
+        IServiceScopeFactory scopeFactory)
     {
         _normalizer = normalizer;
         _client = client;
@@ -41,14 +38,10 @@ public class DrugSearchService : IDrugSearchService
         _configuration = configuration;
         _logger = logger;
         _scopeFactory = scopeFactory;
-        _historyRepository = historyRepository;
     }
 
     public async Task<DrugSearchResult> SearchAsync(string query)
     {
-        var stopwatch = Stopwatch.StartNew();
-        var isCacheHit = false;
-
         try
         {
             // 1. Normalize input
@@ -61,11 +54,6 @@ public class DrugSearchService : IDrugSearchService
             if (isCachingEnabled && _cache.TryGetValue<DrugSearchResult>(cacheKey, out var cachedResult))
             {
                 _logger.LogInformation("Cache hit for normalized query: {NormalizedQuery}", normalized);
-                isCacheHit = true;
-                stopwatch.Stop();
-
-                await SaveSearchHistoryAsync(query, normalized, cachedResult!.Groups.Count, stopwatch.ElapsedMilliseconds, isCacheHit);
-
                 return cachedResult!;
             }
 
@@ -99,15 +87,10 @@ public class DrugSearchService : IDrugSearchService
                     cacheTtlMinutes, cacheKey);
             }
 
-            stopwatch.Stop();
-
-            await SaveSearchHistoryAsync(query, normalized, groups.Count, stopwatch.ElapsedMilliseconds, isCacheHit);
-
             return result;
         }
         catch (Exception ex)
         {
-            stopwatch.Stop();
             _logger.LogError(ex, "Error during drug search for query: {Query}", query);
             throw;
         }
@@ -161,37 +144,4 @@ public class DrugSearchService : IDrugSearchService
         return DEFAULT_CACHE_TTL_MINUTES;
     }
 
-    private async Task SaveSearchHistoryAsync(
-        string queryText,
-        string normalizedQuery,
-        int resultCount,
-        long executionTimeMs,
-        bool cacheHit)
-    {
-        try
-        {
-            // Skip if repository not injected (optional dependency)
-            if (_historyRepository == null)
-            {
-                return;
-            }
-
-            var history = new DrugSearchHistory
-            {
-                QueryText = queryText,
-                NormalizedQuery = normalizedQuery,
-                ResultCount = resultCount,
-                ExecutionTimeMs = (int)executionTimeMs,
-                CacheHit = cacheHit,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _historyRepository.SaveSearchAsync(history);
-            _logger.LogDebug("Saved search history for query: {QueryText}", queryText);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to save search history for query: {QueryText}", queryText);
-        }
-    }
 }

@@ -39,7 +39,7 @@ Swagger is available at `/swagger` when the API is running.
 
 ## Current runtime wiring
 
-- SQL Server stores drug search history and `DrugEmbeddings`.
+- SQL Server stores `DrugEmbeddings`.
 - `DrugEmbedding.EmbeddingJson` stores 768-dimensional vectors as JSON.
 - `InMemoryVectorStore` is registered as a singleton `IVectorStore`.
 - The vector store loads all embeddings at startup and reloads after ingestion.
@@ -53,7 +53,7 @@ Startup applies EF migrations and then calls `IVectorStore.ReloadAsync()`.
 
 ### Drug search
 
-`DrugsController` -> `DrugSearchService` -> normalization -> memory cache -> OpenFDA on cache miss -> grouping -> search history. A cache miss also starts bounded background knowledge ingestion in its own DI scope. Ingestion extracts label sections, deduplicates `(DrugKey, ChunkType)`, creates Ollama embeddings, writes SQL, and reloads the in-memory vector store.
+`DrugsController` -> `DrugSearchService` -> normalization -> memory cache -> OpenFDA on cache miss -> grouping. A cache miss also starts bounded background knowledge ingestion in its own DI scope. Ingestion extracts label sections, deduplicates `(DrugKey, ChunkType)`, creates Ollama embeddings, writes SQL, and reloads the in-memory vector store.
 
 ### Semantic search
 
@@ -65,7 +65,7 @@ Startup applies EF migrations and then calls `IVectorStore.ReloadAsync()`.
 
 ## Persistence
 
-`DrugEmbeddings` has a unique index on `(DrugKey, ChunkType)`. Search history is indexed for creation time, normalized query, and the combined query/time lookup. Repositories use `DrugExplorerDbContext` directly; there is no generic repository abstraction.
+`DrugEmbeddings` has a unique index on `(DrugKey, ChunkType)`. Repositories use `DrugExplorerDbContext` directly; there is no generic repository abstraction.
 
 ## Error handling
 

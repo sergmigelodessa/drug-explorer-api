@@ -12,24 +12,24 @@ public class DrugsController : ControllerBase
     private readonly IDrugSearchService _searchService;
     private readonly ISemanticSearchService _semanticSearchService;
     private readonly IRagAnswerService _ragAnswerService;
+    private readonly IMedicamentSeedService _medicamentSeedService;
     private readonly DrugResultMapper _mapper;
     private readonly ILogger<DrugsController> _logger;
-    private readonly IDrugSearchHistoryRepository _historyRepository;
 
     public DrugsController(
         IDrugSearchService searchService,
         ISemanticSearchService semanticSearchService,
         IRagAnswerService ragAnswerService,
+        IMedicamentSeedService medicamentSeedService,
         DrugResultMapper mapper,
-        ILogger<DrugsController> logger,
-        IDrugSearchHistoryRepository historyRepository)
+        ILogger<DrugsController> logger)
     {
         _searchService = searchService;
         _semanticSearchService = semanticSearchService;
         _ragAnswerService = ragAnswerService;
+        _medicamentSeedService = medicamentSeedService;
         _mapper = mapper;
         _logger = logger;
-        _historyRepository = historyRepository;
     }
 
     /// <summary>
@@ -126,87 +126,35 @@ public class DrugsController : ControllerBase
     }
 
     /// <summary>
-    /// Get search analytics and statistics
+    /// Bulk-populates the Drugs table by querying OpenFDA with a broad, built-in set of drug names
     /// </summary>
-    /// <returns>Analytics data including cache hit rate and top searches</returns>
-    /// <response code="200">Analytics retrieved successfully</response>
-    [HttpGet("analytics")]
-    public async Task<ActionResult<SearchAnalyticsDto>> GetAnalytics()
+    /// <param name="targetCount">Desired number of new medicaments to insert (1 - 5000, default 1000)</param>
+    /// <response code="200">Seeding completed (may stop early if OpenFDA runs out of matches)</response>
+    /// <response code="400">Invalid input</response>
+    [HttpPost("seed-medicaments")]
+    public async Task<ActionResult<MedicamentSeedResponseDto>> SeedMedicaments(
+        [FromQuery] int targetCount = 1000,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Retrieving search analytics");
+        if (targetCount < 1 || targetCount > 5000)
+            throw new ArgumentException("targetCount must be between 1 and 5000", nameof(targetCount));
 
-        var totalSearches = await _historyRepository.GetTotalSearchCountAsync();
-        var cacheHits = await _historyRepository.GetCacheHitCountAsync();
-        var avgExecutionTime = await _historyRepository.GetAverageExecutionTimeAsync();
+        _logger.LogInformation("Medicament seeding requested. Target count: {TargetCount}", targetCount);
 
-        var cacheHitRate = totalSearches > 0 ? (double)cacheHits / totalSearches * 100 : 0;
+        var result = await _medicamentSeedService.SeedAsync(targetCount, cancellationToken);
 
-        // Get top 10 queries by frequency
-        var recentSearches = await _historyRepository.GetRecentSearchesAsync(limit: 1000);
-        var topQueries = recentSearches
-            .GroupBy(h => h.NormalizedQuery)
-            .OrderByDescending(g => g.Count())
-            .Take(10)
-            .Select(g => new SearchQueryStatsDto
-            {
-                NormalizedQuery = g.Key,
-                SearchCount = g.Count(),
-                CacheHitCount = g.Count(h => h.CacheHit),
-                AverageExecutionTimeMs = g.Average(h => h.ExecutionTimeMs),
-                LastSearchedAt = g.Max(h => h.CreatedAt)
-            })
-            .ToList();
-
-        var analytics = new SearchAnalyticsDto
+        var response = new MedicamentSeedResponseDto
         {
-            TotalSearches = totalSearches,
-            CacheHits = cacheHits,
-            CacheHitRate = cacheHitRate,
-            AverageExecutionTimeMs = avgExecutionTime,
-            TopQueries = topQueries
+            TotalInserted = result.TotalInserted,
+            TotalSkippedDuplicates = result.TotalSkippedDuplicates,
+            TotalSkippedByLimit = result.TotalSkippedByLimit,
+            QueriesUsed = result.QueriesUsed,
+            RequestsMade = result.RequestsMade,
+            ReachedTarget = result.ReachedTarget
         };
 
-        _logger.LogInformation("Analytics retrieved: {TotalSearches} searches, {CacheHitRate:F2}% cache hit rate",
-            totalSearches, cacheHitRate);
+        _logger.LogInformation("Medicament seeding completed. Inserted: {Inserted}", response.TotalInserted);
 
-        return Ok(analytics);
-    }
-
-    /// <summary>
-    /// Get search history for a specific normalized query
-    /// </summary>
-    /// <param name="normalizedQuery">The normalized query to get history for</param>
-    /// <param name="limit">Maximum number of records to return (default: 50)</param>
-    /// <returns>List of historical searches</returns>
-    /// <response code="200">History retrieved successfully</response>
-    [HttpGet("history")]
-    public async Task<ActionResult<List<SearchHistoryDto>>> GetHistory(
-        [FromQuery] string normalizedQuery,
-        [FromQuery] int limit = 50)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedQuery))
-            throw new ArgumentException("normalizedQuery parameter is required", nameof(normalizedQuery));
-
-        if (limit < 1 || limit > 1000)
-            throw new ArgumentException("limit must be between 1 and 1000", nameof(limit));
-
-        _logger.LogInformation("Retrieving search history for query: {NormalizedQuery}, limit: {Limit}",
-            normalizedQuery, limit);
-
-        var history = await _historyRepository.GetHistoryByQueryAsync(normalizedQuery, limit);
-        var historyDtos = history
-            .Select(h => new SearchHistoryDto
-            {
-                Id = h.Id,
-                QueryText = h.QueryText,
-                NormalizedQuery = h.NormalizedQuery,
-                ResultCount = h.ResultCount,
-                ExecutionTimeMs = h.ExecutionTimeMs,
-                CacheHit = h.CacheHit,
-                CreatedAt = h.CreatedAt
-            })
-            .ToList();
-
-        return Ok(historyDtos);
+        return Ok(response);
     }
 }

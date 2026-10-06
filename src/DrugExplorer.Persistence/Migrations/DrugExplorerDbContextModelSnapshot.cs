@@ -22,6 +22,167 @@ namespace DrugExplorer.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("DrugExplorer.Domain.Entities.Drug", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ActiveIngredient")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AskDoctor")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AskDoctorOrPharmacist")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BrandName")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("DosageAndAdministration")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DosageAndAdministrationTable")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DosageForm")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("DoNotUse")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EffectiveTime")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("GenericName")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("IndicationsAndUsage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool?>("IsOriginalPackager")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("InactiveIngredient")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("KeepOutOfReachOfChildren")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ManufacturerName")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("OpenFdaId")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("PackageLabelPrincipalDisplayPanel")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PackageNdc")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("PharmClassCs")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("PharmClassEpc")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("PharmClassMoa")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("PregnancyOrBreastFeeding")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProductNdc")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("ProductType")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Purpose")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RecentMajorChanges")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Route")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Rxcui")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("SetId")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("SplId")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("SplProductDataElements")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SplSetId")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("SplUnclassifiedSection")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StopUse")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SubstanceName")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Warnings")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WhenUsing")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Unii")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SetId")
+                        .HasDatabaseName("IX_Drugs_SetId");
+
+                    b.ToTable("Drugs");
+                });
+
             modelBuilder.Entity("DrugExplorer.Domain.Entities.DrugEmbedding", b =>
                 {
                     b.Property<Guid>("Id")
@@ -70,51 +231,6 @@ namespace DrugExplorer.Persistence.Migrations
                     b.ToTable("DrugEmbeddings");
                 });
 
-            modelBuilder.Entity("DrugExplorer.Domain.Entities.DrugSearchHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("CacheHit")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETUTCDATE()");
-
-                    b.Property<int>("ExecutionTimeMs")
-                        .HasColumnType("int");
-
-                    b.Property<string>("NormalizedQuery")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("QueryText")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<int>("ResultCount")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedAt")
-                        .HasDatabaseName("IX_SearchHistory_CreatedAt");
-
-                    b.HasIndex("NormalizedQuery")
-                        .HasDatabaseName("IX_SearchHistory_NormalizedQuery");
-
-                    b.HasIndex("NormalizedQuery", "CreatedAt")
-                        .HasDatabaseName("IX_SearchHistory_NormalizedQuery_CreatedAt");
-
-                    b.ToTable("SearchHistory");
-                });
 #pragma warning restore 612, 618
         }
     }
