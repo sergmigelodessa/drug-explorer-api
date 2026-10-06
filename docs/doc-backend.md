@@ -80,6 +80,144 @@ Ollama and Qdrant must both be running for embedding, search and RAG. The collec
 
 `GlobalExceptionMiddleware` maps `ExternalApiException` to its configured HTTP status (normally 502), `SearchProcessingException` and `ArgumentException` to 400, and unexpected exceptions to 500. Responses include timestamp, trace ID, error code, and details.
 
+## Vector-search architecture
+
+```mermaid
+flowchart LR
+    subgraph Application
+        Rag[RagAnswerService]
+        Sem[SemanticSearchService]
+        Ing[DrugKnowledgeIngestionService]
+        Build[VectorIndexBuildService]
+    end
+    Rag & Sem --> IVS[IVectorStore]
+    Ing & Build --> IVW[IVectorIndexWriter]
+    Rag & Sem & Ing & Build --> Emb[IEmbeddingService]
+    Build --> Repo[IMedicamentRepository]
+    IVS -.implemented by.-> Q[QdrantVectorStore]
+    IVW -.implemented by.-> Q
+    IVS -.implemented by.-> M[InMemoryVectorStore]
+    Emb --> Ollama[(Ollama)]
+    Q --> Qdrant[(Qdrant)]
+    Repo --> SQL[(SQL Server)]
+```
+
+- `IVectorStore` (read) has two implementations: `QdrantVectorStore` (active) and `InMemoryVectorStore` (kept for reference, not registered in DI; it also implements `IReloadableVectorStore`).
+- `IVectorIndexWriter` (write) is implemented only by `QdrantVectorStore`.
+- SQL Server holds the source data (`Drugs`); Qdrant holds vectors plus payload for retrieval.
+
+## Configuration
+
+Settings live in `src/DrugExplorer.Api/appsettings.json`. Put local overrides (for example the connection string) in `appsettings.Development.json`; see `appsettings.Development.json.example`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `ConnectionStrings:DefaultConnection` | empty | SQL Server connection string |
+| `Ollama:BaseUrl` | `http://localhost:11434/` | Ollama server |
+| `Ollama:EmbeddingModel` | `nomic-embed-text` | Embedding model (768 dimensions) |
+| `Ollama:ChatModel` | `qwen2.5:1.5b` | Chat model for RAG answers |
+| `Qdrant:BaseUrl` | `http://localhost:6333/` | Qdrant REST endpoint |
+| `Qdrant:CollectionName` | `drug_chunks` | Collection used for drug chunks |
+| `Qdrant:VectorSize` | `768` | Must match the embedding model output |
+| `Qdrant:TimeoutSeconds` | `30` | HTTP timeout for Qdrant calls |
+| `Qdrant:ApiKey` | empty | Sent as the `api-key` header when set |
+| `CacheSettings:EnableCaching` / `SearchCacheTtlMinutes` | `true` / `10` | Search result caching |
+
+If you change the embedding model, change `Qdrant:VectorSize` and use a new collection name (or delete the old collection), because an existing collection with a different size makes startup validation fail.
+
+## Running locally
+
+Prerequisites: .NET 8 SDK, SQL Server, Ollama, and Qdrant.
+
+1. **Qdrant** (WSL distro `DrugExplorerUbuntu`, binary in `/opt/qdrant`). Run from any PowerShell window and keep it open:
+   ```powershell
+   wsl -d DrugExplorerUbuntu --cd /opt/qdrant -- ./qdrant
+   ```
+   Data is stored in `/opt/qdrant/storage`. Check: `Invoke-RestMethod http://localhost:6333/collections`. Dashboard: `http://localhost:6333/dashboard`.
+2. **Ollama**:
+   ```powershell
+   ollama pull nomic-embed-text
+   ollama pull qwen2.5:1.5b
+   ollama serve   # not needed if the Ollama tray app is running
+   ```
+   Check: `Invoke-RestMethod http://localhost:11434/api/tags`.
+3. **API** (from `DrugExplorer/`). Startup applies EF migrations and ensures the Qdrant collection exists:
+   ```powershell
+   dotnet run --project src/DrugExplorer.Api/DrugExplorer.Api.csproj
+   ```
+   URLs: `https://localhost:7219` and `http://localhost:5034`. Swagger: `/swagger`.
+4. **Fill SQL** if the `Drugs` table is empty: `POST /api/drugs/seed-medicaments?targetCount=1000`.
+5. **Fill Qdrant**: `POST /api/drugs/build-vector-index`. This embeds every chunk missing from Qdrant, one at a time. It is slow on CPU and blocks until finished; progress is logged. Re-running is safe because existing points are skipped.
+   ```powershell
+   Invoke-RestMethod -Method Post http://localhost:5034/api/drugs/build-vector-index -TimeoutSec 0
+   ```
+   The response contains `DrugsScanned`, `ChunksEmbedded`, `ChunksSkippedExisting` and `ChunksFailed`.
+
+## Testing
+
+### Automated tests
+
+```powershell
+dotnet test tests/DrugExplorer.Tests/DrugExplorer.Tests.csproj
+```
+
+MSTest with Moq. Unit tests are in `tests/DrugExplorer.Tests/UnitTests` and need no external services.
+
+### Manual checks against Qdrant
+
+Collection name is `drug_chunks`.
+
+```powershell
+# Collection info (vector size, distance, points_count)
+Invoke-RestMethod http://localhost:6333/collections/drug_chunks
+
+# Exact point count
+Invoke-RestMethod -Method Post http://localhost:6333/collections/drug_chunks/points/count `
+  -ContentType 'application/json' -Body '{"exact":true}'
+
+# Browse stored points (payload only)
+Invoke-RestMethod -Method Post http://localhost:6333/collections/drug_chunks/points/scroll `
+  -ContentType 'application/json' -Body '{"limit":3,"with_payload":true,"with_vector":false}' |
+  ConvertTo-Json -Depth 8
+
+# Similarity search: embed the query with Ollama, then search
+$v = (Invoke-RestMethod -Method Post http://localhost:11434/api/embeddings `
+  -ContentType 'application/json' `
+  -Body '{"model":"nomic-embed-text","prompt":"side effects of ibuprofen"}').embedding
+$body = @{ vector = $v; limit = 3; with_payload = $true } | ConvertTo-Json -Depth 3
+Invoke-RestMethod -Method Post http://localhost:6333/collections/drug_chunks/points/search `
+  -ContentType 'application/json' -Body $body | ConvertTo-Json -Depth 8
+```
+
+`score` is cosine similarity; the RAG service ignores hits below `0.35`.
+
+To reset the index (the collection is recreated on the next API start or build run):
+
+```powershell
+Invoke-RestMethod -Method Delete http://localhost:6333/collections/drug_chunks
+```
+
+### End-to-end through the API
+
+```powershell
+Invoke-RestMethod "http://localhost:5034/api/drugs/semantic-search?query=pain relief&topK=5"
+Invoke-RestMethod -Method Post http://localhost:5034/api/drugs/ask `
+  -ContentType 'application/json' -Body '{"question":"Can ibuprofen be used during pregnancy?"}'
+```
+
+The first `ask` after Ollama starts can be slow while the chat model loads. With an empty collection, both endpoints return an empty result or a non-grounded answer.
+
+### Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| Startup warning "Qdrant collection check failed" | Qdrant is not running or `Qdrant:BaseUrl` is wrong |
+| Startup throws about collection size/distance | Collection was created with a different `VectorSize`; delete it or use a new name |
+| 502 from `ask`, `semantic-search` or the build endpoint | Ollama or Qdrant unreachable (`ExternalApiException`) |
+| `ChunksFailed` > 0 | Chunk embedding failed (often text too long or Ollama down); see logs and re-run |
+| `ask` always ungrounded | Collection empty or no hit reached similarity `0.35` |
+| `dotnet build` fails with NU1301 / 401 | Private NuGet feed in `NuGet.config`; environment issue unrelated to the code |
+
 ## Useful commands
 
 Run from `DrugExplorer/`:
