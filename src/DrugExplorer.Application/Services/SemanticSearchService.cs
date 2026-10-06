@@ -28,14 +28,14 @@ public class SemanticSearchService : ISemanticSearchService
         int topK = 10,
         CancellationToken cancellationToken = default)
     {
-        if (_vectorStore.Count == 0)
+        if (await _vectorStore.CountAsync(cancellationToken) == 0)
         {
             _logger.LogWarning("Semantic search requested but vector store is empty");
             return new List<SemanticDrugResult>();
         }
 
         var queryVector = await _embeddingService.EmbedAsync(query, cancellationToken);
-        var rawHits = _vectorStore.Search(queryVector, topK * RAW_HITS_MULTIPLIER);
+        var rawHits = await _vectorStore.SearchAsync(queryVector, topK * RAW_HITS_MULTIPLIER, cancellationToken);
 
         var results = rawHits
             .GroupBy(hit => hit.Embedding.DrugKey)

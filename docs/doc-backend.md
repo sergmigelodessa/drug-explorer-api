@@ -33,31 +33,40 @@ Base route: `api/drugs`
 | `GET` | `/search?query=` | `IDrugSearchService` | OpenFDA search, grouping, caching, history, background ingestion |
 | `GET` | `/semantic-search?query=&topK=` | `ISemanticSearchService` | Embedding-based search over drug chunks |
 | `POST` | `/ask` | `IRagAnswerService` | Grounded answer from retrieved label chunks |
+| `POST` | `/seed-medicaments?targetCount=` | `IMedicamentSeedService` | Bulk-populate the Drugs table from OpenFDA |
+| `POST` | `/build-vector-index` | `IVectorIndexBuildService` | Embed every Drugs chunk missing from Qdrant, one by one; idempotent |
 | `GET` | `/analytics` | search-history repository | Aggregate search metrics |
 
 Swagger is available at `/swagger` when the API is running.
 
 ## Current runtime wiring
 
-- SQL Server stores `DrugEmbeddings`.
-- `DrugEmbedding.EmbeddingJson` stores 768-dimensional vectors as JSON.
-- `InMemoryVectorStore` is registered as a singleton `IVectorStore`.
-- The vector store loads all embeddings at startup and reloads after ingestion.
+- SQL Server stores `Drugs` (source data) and `DrugEmbeddings` (written by search-time ingestion).
+- `QdrantVectorStore` implements both `IVectorStore` (`CountAsync`, `SearchAsync`) and `IVectorIndexWriter` (`EnsureCollectionAsync`, `GetExistingIdsAsync`, `UpsertAsync`) over the Qdrant REST API.
+- Qdrant collection `drug_chunks`: 768 dimensions, `Cosine` distance; payload `DrugKey`, `BrandName`, `GenericName`, `ChunkType`, `ChunkText`. Point id is a deterministic GUID from `DrugKey` + `ChunkType` (`DrugChunks.BuildPointId`).
+- Config section `Qdrant`: `BaseUrl`, `CollectionName`, `VectorSize`, `TimeoutSeconds`, `ApiKey`.
+- `InMemoryVectorStore` still exists as `IReloadableVectorStore` (adds `ReloadAsync`) but is not registered in DI.
 - `OllamaEmbeddingClient` uses `nomic-embed-text` at `http://localhost:11434/`.
 - `OllamaChatClient` uses `qwen2.5:1.5b`; its timeout is 180 seconds because model loading can be slow.
 - OpenFDA is accessed through a typed client with a 10-second timeout.
 
-Startup applies EF migrations and then calls `IVectorStore.ReloadAsync()`.
+Startup applies EF migrations and then ensures the Qdrant collection exists; if Qdrant is unreachable it only logs a warning. An existing collection with a different size or distance throws.
+
+Ollama and Qdrant must both be running for embedding, search and RAG. The collection stays empty until `POST /api/drugs/build-vector-index` (or search-time ingestion) populates it.
 
 ## Request flows
 
 ### Drug search
 
-`DrugsController` -> `DrugSearchService` -> normalization -> memory cache -> OpenFDA on cache miss -> grouping. A cache miss also starts bounded background knowledge ingestion in its own DI scope. Ingestion extracts label sections, deduplicates `(DrugKey, ChunkType)`, creates Ollama embeddings, writes SQL, and reloads the in-memory vector store.
+`DrugsController` -> `DrugSearchService` -> normalization -> memory cache -> OpenFDA on cache miss -> grouping. A cache miss also starts bounded background knowledge ingestion in its own DI scope. Ingestion extracts label sections, deduplicates `(DrugKey, ChunkType)`, creates Ollama embeddings, writes SQL, and upserts the points to Qdrant.
+
+### Vector index build
+
+`VectorIndexBuildService` pages through `Drugs` (100 per page, ordered by `Id`), builds chunks per drug, skips empty text and ids already in Qdrant (one batch existence check per page), then embeds and upserts each missing chunk individually. Per-chunk failures are logged and counted. Returns `DrugsScanned`, `ChunksEmbedded`, `ChunksSkippedExisting`, `ChunksFailed`.
 
 ### Semantic search
 
-`SemanticSearchService` embeds the query, asks `IVectorStore` for `topK * 5` cosine-similarity hits, groups hits by `DrugKey`, keeps the best hit per drug, and returns the requested number of drug results.
+`SemanticSearchService` embeds the query, asks `IVectorStore.SearchAsync` (Qdrant) for `topK * 5` cosine-similarity hits, groups hits by `DrugKey`, keeps the best hit per drug, and returns the requested number of drug results.
 
 ### RAG ask
 
@@ -85,4 +94,4 @@ Before using `dotnet run --no-build`, rebuild after code changes, migrations, or
 
 ## Vector-search direction
 
-Qdrant is installed in the WSL2 distribution `DrugExplorerUbuntu`, exposed at `http://localhost:6333`. It is not wired into the API yet. The intended architecture keeps SQL Server as the source of drug metadata and chunks while Qdrant stores searchable vectors and payload. See [qdrant-migration.md](qdrant-migration.md).
+Qdrant is installed in the WSL2 distribution `DrugExplorerUbuntu`, exposed at `http://localhost:6333`, and is now the active vector store. SQL Server remains the source of drug data. Remaining migration items (verification report, retries, integration tests, backup) are tracked in [qdrant-migration.md](qdrant-migration.md).

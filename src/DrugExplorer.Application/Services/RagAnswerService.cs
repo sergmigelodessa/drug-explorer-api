@@ -32,20 +32,18 @@ public class RagAnswerService : IRagAnswerService
 
     public async Task<RagAnswer> AskAsync(string question, CancellationToken cancellationToken = default)
     {
-        if (_vectorStore.Count == 0)
+        if (await _vectorStore.CountAsync(cancellationToken) == 0)
         {
-            _logger.LogWarning("Ask requested but vector store is empty");
             return new RagAnswer { Answer = NO_CONTEXT_ANSWER, Grounded = false };
         }
 
         var questionVector = await _embeddingService.EmbedAsync(question, cancellationToken);
-        var hits = _vectorStore.Search(questionVector, MAX_CONTEXT_CHUNKS)
+        var hits = (await _vectorStore.SearchAsync(questionVector, MAX_CONTEXT_CHUNKS, cancellationToken))
             .Where(hit => hit.Similarity >= MIN_SIMILARITY_THRESHOLD)
             .ToList();
 
         if (hits.Count == 0)
         {
-            _logger.LogInformation("No context above similarity threshold for question: {Question}", question);
             return new RagAnswer { Answer = NO_CONTEXT_ANSWER, Grounded = false };
         }
 
@@ -62,8 +60,6 @@ public class RagAnswerService : IRagAnswerService
 
         var prompt = BuildPrompt(question, sources);
         var answer = await _chatCompletionService.CompleteAsync(prompt, cancellationToken);
-
-        _logger.LogInformation("Generated RAG answer using {SourceCount} sources", sources.Count);
 
         return new RagAnswer
         {

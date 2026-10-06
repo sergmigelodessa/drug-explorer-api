@@ -1,6 +1,7 @@
 using DrugExplorer.Api.Dto;
 using DrugExplorer.Api.Mappings;
 using DrugExplorer.Application.Interfaces;
+using DrugExplorer.Domain.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DrugExplorer.Api.Controllers;
@@ -13,6 +14,7 @@ public class DrugsController : ControllerBase
     private readonly ISemanticSearchService _semanticSearchService;
     private readonly IRagAnswerService _ragAnswerService;
     private readonly IMedicamentSeedService _medicamentSeedService;
+    private readonly IVectorIndexBuildService _vectorIndexBuildService;
     private readonly DrugResultMapper _mapper;
     private readonly ILogger<DrugsController> _logger;
 
@@ -21,6 +23,7 @@ public class DrugsController : ControllerBase
         ISemanticSearchService semanticSearchService,
         IRagAnswerService ragAnswerService,
         IMedicamentSeedService medicamentSeedService,
+        IVectorIndexBuildService vectorIndexBuildService,
         DrugResultMapper mapper,
         ILogger<DrugsController> logger)
     {
@@ -28,6 +31,7 @@ public class DrugsController : ControllerBase
         _semanticSearchService = semanticSearchService;
         _ragAnswerService = ragAnswerService;
         _medicamentSeedService = medicamentSeedService;
+        _vectorIndexBuildService = vectorIndexBuildService;
         _mapper = mapper;
         _logger = logger;
     }
@@ -54,13 +58,8 @@ public class DrugsController : ControllerBase
         if (query.Length > 256)
             throw new ArgumentException("Query cannot exceed 256 characters", nameof(query));
 
-        _logger.LogInformation("Searching for drugs with query: {Query}", query);
-
         var result = await _searchService.SearchAsync(query);
         var response = _mapper.MapSearchResult(result);
-
-        _logger.LogInformation("Search completed successfully. Found {GroupCount} groups with {VariantCount} total variants",
-            response.TotalGroups, response.TotalVariants);
 
         return Ok(response);
     }
@@ -86,12 +85,8 @@ public class DrugsController : ControllerBase
         if (topK < 1 || topK > 50)
             throw new ArgumentException("topK must be between 1 and 50", nameof(topK));
 
-        _logger.LogInformation("Semantic search for query: {Query}", query);
-
         var results = await _semanticSearchService.SearchAsync(query, topK);
         var response = _mapper.MapSemanticResult(query, results);
-
-        _logger.LogInformation("Semantic search completed. Found {Count} drugs", response.Results.Count);
 
         return Ok(response);
     }
@@ -114,13 +109,8 @@ public class DrugsController : ControllerBase
         if (request.Question.Length > 512)
             throw new ArgumentException("Question cannot exceed 512 characters", nameof(request));
 
-        _logger.LogInformation("Ask request: {Question}", request.Question);
-
         var answer = await _ragAnswerService.AskAsync(request.Question);
         var response = _mapper.MapRagAnswer(answer);
-
-        _logger.LogInformation("Ask completed. Grounded: {Grounded}, Sources: {SourceCount}",
-            response.Grounded, response.Sources.Count);
 
         return Ok(response);
     }
@@ -156,5 +146,16 @@ public class DrugsController : ControllerBase
         _logger.LogInformation("Medicament seeding completed. Inserted: {Inserted}", response.TotalInserted);
 
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Embeds every Drugs chunk that is not yet in Qdrant (one by one; safe to re-run)
+    /// </summary>
+    /// <response code="200">Build finished</response>
+    [HttpPost("build-vector-index")]
+    public async Task<ActionResult<VectorIndexBuildResult>> BuildVectorIndex(CancellationToken cancellationToken = default)
+    {
+        var result = await _vectorIndexBuildService.BuildAsync(cancellationToken);
+        return Ok(result);
     }
 }

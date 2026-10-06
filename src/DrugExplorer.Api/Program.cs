@@ -78,6 +78,24 @@ builder.Services.AddHttpClient<IChatCompletionService, OllamaChatClient>(client 
     ollamaChatModel,
     sp.GetRequiredService<ILogger<OllamaChatClient>>()));
 
+var qdrantOptions = builder.Configuration.GetSection("Qdrant").Get<QdrantOptions>() ?? new QdrantOptions();
+
+builder.Services.AddHttpClient<QdrantVectorStore>(client =>
+{
+    client.BaseAddress = new Uri(qdrantOptions.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(qdrantOptions.TimeoutSeconds);
+    if (!string.IsNullOrEmpty(qdrantOptions.ApiKey))
+    {
+        client.DefaultRequestHeaders.Add("api-key", qdrantOptions.ApiKey);
+    }
+})
+.AddTypedClient((httpClient, sp) => new QdrantVectorStore(
+    httpClient,
+    qdrantOptions,
+    sp.GetRequiredService<ILogger<QdrantVectorStore>>()));
+builder.Services.AddTransient<IVectorStore>(sp => sp.GetRequiredService<QdrantVectorStore>());
+builder.Services.AddTransient<IVectorIndexWriter>(sp => sp.GetRequiredService<QdrantVectorStore>());
+
 builder.Services.AddScoped<IDrugNormalizationService, DrugNormalizationService>();
 builder.Services.AddScoped<IDrugGroupingService, DrugGroupingService>();
 builder.Services.AddScoped<IDrugSearchService, DrugSearchService>();
@@ -86,7 +104,7 @@ builder.Services.AddScoped<IDrugEmbeddingRepository, DrugEmbeddingRepository>();
 builder.Services.AddScoped<IMedicamentRepository, MedicamentRepo>();
 builder.Services.AddScoped<IDrugKnowledgeIngestionService, DrugKnowledgeIngestionService>();
 builder.Services.AddScoped<IMedicamentSeedService, MedicamentSeedService>();
-builder.Services.AddSingleton<IVectorStore, InMemoryVectorStore>();
+builder.Services.AddScoped<IVectorIndexBuildService, VectorIndexBuildService>();
 builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>();
 builder.Services.AddScoped<IRagAnswerService, RagAnswerService>();
 builder.Services.AddScoped<DrugResultMapper>();
@@ -100,8 +118,18 @@ using (var scope = app.Services.CreateScope())
     dbContext.Database.Migrate();
 }
 
-// Warm the in-memory vector store cache from persisted embeddings
-await app.Services.GetRequiredService<IVectorStore>().ReloadAsync();
+// Create the Qdrant collection if missing; don't block startup when Qdrant is down.
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        await scope.ServiceProvider.GetRequiredService<IVectorIndexWriter>().EnsureCollectionAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Qdrant collection check failed at startup");
+    }
+}
 
 // Configure the HTTP request pipeline.
 app.UseSwagger();

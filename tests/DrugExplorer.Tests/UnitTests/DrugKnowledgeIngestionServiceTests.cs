@@ -17,7 +17,7 @@ public class DrugKnowledgeIngestionServiceTests
         var candidates = new List<DrugCandidate> { new() { BrandName = "", GenericName = "" } };
         var embeddingService = new Mock<IEmbeddingService>();
         var repository = new Mock<IDrugEmbeddingRepository>();
-        var vectorStore = new Mock<IVectorStore>();
+        var vectorStore = new Mock<IVectorIndexWriter>();
 
         var service = CreateService(embeddingService.Object, repository.Object, vectorStore.Object);
 
@@ -25,11 +25,11 @@ public class DrugKnowledgeIngestionServiceTests
 
         embeddingService.Verify(x => x.EmbedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         repository.Verify(x => x.AddRangeAsync(It.IsAny<IEnumerable<DrugEmbedding>>(), It.IsAny<CancellationToken>()), Times.Never);
-        vectorStore.Verify(x => x.ReloadAsync(It.IsAny<CancellationToken>()), Times.Never);
+        vectorStore.Verify(x => x.UpsertAsync(It.IsAny<IReadOnlyCollection<VectorPoint>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [TestMethod]
-    public async Task IngestAsync_EmbedsAndSavesNewChunks_ThenReloadsVectorStore()
+    public async Task IngestAsync_EmbedsAndSavesNewChunks_ThenUpsertsToVectorIndex()
     {
         var candidates = new List<DrugCandidate>
         {
@@ -50,7 +50,7 @@ public class DrugKnowledgeIngestionServiceTests
             .Callback<IEnumerable<DrugEmbedding>, CancellationToken>((embeddings, _) => savedEmbeddings = embeddings.ToList())
             .Returns(Task.CompletedTask);
 
-        var vectorStore = new Mock<IVectorStore>();
+        var vectorStore = new Mock<IVectorIndexWriter>();
 
         var service = CreateService(embeddingService.Object, repository.Object, vectorStore.Object);
 
@@ -61,7 +61,7 @@ public class DrugKnowledgeIngestionServiceTests
         Assert.IsTrue(savedEmbeddings.Any(e => e.ChunkType == DrugChunkType.Purpose && e.ChunkText == "Pain relief"));
         Assert.IsTrue(savedEmbeddings.Any(e => e.ChunkType == DrugChunkType.Warnings && e.ChunkText == "Consult a doctor"));
         Assert.IsTrue(savedEmbeddings.All(e => e.DrugKey == "acetylsalicylic acid|aspirin"));
-        vectorStore.Verify(x => x.ReloadAsync(It.IsAny<CancellationToken>()), Times.Once);
+        vectorStore.Verify(x => x.UpsertAsync(It.IsAny<IReadOnlyCollection<VectorPoint>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [TestMethod]
@@ -76,7 +76,7 @@ public class DrugKnowledgeIngestionServiceTests
         var repository = new Mock<IDrugEmbeddingRepository>();
         repository.Setup(x => x.ExistsAsync(It.IsAny<string>(), DrugChunkType.Purpose, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
-        var vectorStore = new Mock<IVectorStore>();
+        var vectorStore = new Mock<IVectorIndexWriter>();
 
         var service = CreateService(embeddingService.Object, repository.Object, vectorStore.Object);
 
@@ -84,7 +84,7 @@ public class DrugKnowledgeIngestionServiceTests
 
         embeddingService.Verify(x => x.EmbedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         repository.Verify(x => x.AddRangeAsync(It.IsAny<IEnumerable<DrugEmbedding>>(), It.IsAny<CancellationToken>()), Times.Never);
-        vectorStore.Verify(x => x.ReloadAsync(It.IsAny<CancellationToken>()), Times.Never);
+        vectorStore.Verify(x => x.UpsertAsync(It.IsAny<IReadOnlyCollection<VectorPoint>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [TestMethod]
@@ -110,7 +110,7 @@ public class DrugKnowledgeIngestionServiceTests
             .Callback<IEnumerable<DrugEmbedding>, CancellationToken>((embeddings, _) => savedEmbeddings = embeddings.ToList())
             .Returns(Task.CompletedTask);
 
-        var vectorStore = new Mock<IVectorStore>();
+        var vectorStore = new Mock<IVectorIndexWriter>();
 
         var service = CreateService(embeddingService.Object, repository.Object, vectorStore.Object);
 
@@ -141,7 +141,7 @@ public class DrugKnowledgeIngestionServiceTests
             .Callback<IEnumerable<DrugEmbedding>, CancellationToken>((embeddings, _) => savedEmbeddings = embeddings.ToList())
             .Returns(Task.CompletedTask);
 
-        var vectorStore = new Mock<IVectorStore>();
+        var vectorStore = new Mock<IVectorIndexWriter>();
 
         var service = CreateService(embeddingService.Object, repository.Object, vectorStore.Object);
 
@@ -151,7 +151,7 @@ public class DrugKnowledgeIngestionServiceTests
     }
 
     [TestMethod]
-    public async Task IngestAsync_WhenNoNewChunksToIngest_DoesNotCallAddRangeOrReload()
+    public async Task IngestAsync_WhenNoNewChunksToIngest_DoesNotCallAddRangeOrUpsert()
     {
         var candidates = new List<DrugCandidate>
         {
@@ -160,20 +160,20 @@ public class DrugKnowledgeIngestionServiceTests
 
         var embeddingService = new Mock<IEmbeddingService>();
         var repository = new Mock<IDrugEmbeddingRepository>();
-        var vectorStore = new Mock<IVectorStore>();
+        var vectorStore = new Mock<IVectorIndexWriter>();
 
         var service = CreateService(embeddingService.Object, repository.Object, vectorStore.Object);
 
         await service.IngestAsync(candidates);
 
         repository.Verify(x => x.AddRangeAsync(It.IsAny<IEnumerable<DrugEmbedding>>(), It.IsAny<CancellationToken>()), Times.Never);
-        vectorStore.Verify(x => x.ReloadAsync(It.IsAny<CancellationToken>()), Times.Never);
+        vectorStore.Verify(x => x.UpsertAsync(It.IsAny<IReadOnlyCollection<VectorPoint>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private static DrugKnowledgeIngestionService CreateService(
         IEmbeddingService embeddingService,
         IDrugEmbeddingRepository repository,
-        IVectorStore vectorStore)
+        IVectorIndexWriter vectorStore)
     {
         return new DrugKnowledgeIngestionService(
             embeddingService,

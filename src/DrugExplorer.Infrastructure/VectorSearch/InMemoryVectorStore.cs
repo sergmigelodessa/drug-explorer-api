@@ -8,7 +8,7 @@ using DrugExplorer.Domain.Models;
 namespace DrugExplorer.Infrastructure.VectorSearch;
 
 // Singleton in-memory brute-force cosine-similarity store over DrugEmbeddings, refreshed from SQL Server on demand.
-public class InMemoryVectorStore : IVectorStore
+public class InMemoryVectorStore : IReloadableVectorStore
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<InMemoryVectorStore> _logger;
@@ -23,7 +23,7 @@ public class InMemoryVectorStore : IVectorStore
         _logger = logger;
     }
 
-    public int Count => _cache.Count;
+    public Task<int> CountAsync(CancellationToken cancellationToken = default) => Task.FromResult(_cache.Count);
 
     public async Task ReloadAsync(CancellationToken cancellationToken = default)
     {
@@ -46,15 +46,17 @@ public class InMemoryVectorStore : IVectorStore
         }
     }
 
-    public IReadOnlyList<VectorSearchHit> Search(float[] queryVector, int topK)
+    public Task<IReadOnlyList<VectorSearchHit>> SearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default)
     {
         var snapshot = _cache;
 
-        return snapshot
+        IReadOnlyList<VectorSearchHit> hits = snapshot
             .Select(item => new VectorSearchHit(item.Entity, CosineSimilarity(queryVector, item.Vector)))
             .OrderByDescending(hit => hit.Similarity)
             .Take(topK)
             .ToList();
+
+        return Task.FromResult(hits);
     }
 
     private static double CosineSimilarity(float[] a, float[] b)

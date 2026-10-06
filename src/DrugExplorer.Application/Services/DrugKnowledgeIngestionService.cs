@@ -13,24 +13,24 @@ public class DrugKnowledgeIngestionService : IDrugKnowledgeIngestionService
 
     private readonly IEmbeddingService _embeddingService;
     private readonly IDrugEmbeddingRepository _repository;
-    private readonly IVectorStore _vectorStore;
+    private readonly IVectorIndexWriter _indexWriter;
     private readonly ILogger<DrugKnowledgeIngestionService> _logger;
 
     public DrugKnowledgeIngestionService(
         IEmbeddingService embeddingService,
         IDrugEmbeddingRepository repository,
-        IVectorStore vectorStore,
+        IVectorIndexWriter indexWriter,
         ILogger<DrugKnowledgeIngestionService> logger)
     {
         _embeddingService = embeddingService;
         _repository = repository;
-        _vectorStore = vectorStore;
+        _indexWriter = indexWriter;
         _logger = logger;
     }
 
     public async Task IngestAsync(IReadOnlyList<DrugCandidate> candidates, CancellationToken cancellationToken = default)
     {
-        var toIngest = new List<DrugEmbedding>();
+        var toIngest = new List<VectorPoint>();
         var seenInBatch = new HashSet<(string DrugKey, DrugChunkType ChunkType)>();
 
         // Cap per call so a single search doesn't trigger dozens of embedding calls.
@@ -62,8 +62,9 @@ public class DrugKnowledgeIngestionService : IDrugKnowledgeIngestionService
 
                 var vector = await _embeddingService.EmbedAsync(text, cancellationToken);
 
-                toIngest.Add(new DrugEmbedding
+                var embedding = new DrugEmbedding
                 {
+                    Id = DrugChunks.BuildPointId(drugKey, chunkType),
                     DrugKey = drugKey,
                     BrandName = candidate.BrandName,
                     GenericName = candidate.GenericName,
@@ -71,7 +72,9 @@ public class DrugKnowledgeIngestionService : IDrugKnowledgeIngestionService
                     ChunkText = text,
                     EmbeddingJson = JsonSerializer.Serialize(vector),
                     CreatedAt = DateTime.UtcNow
-                });
+                };
+
+                toIngest.Add(new VectorPoint(embedding, vector));
             }
         }
 
@@ -80,22 +83,15 @@ public class DrugKnowledgeIngestionService : IDrugKnowledgeIngestionService
             return;
         }
 
-        await _repository.AddRangeAsync(toIngest, cancellationToken);
-        await _vectorStore.ReloadAsync(cancellationToken);
+        await _repository.AddRangeAsync(toIngest.Select(p => p.Embedding).ToList(), cancellationToken);
+        await _indexWriter.EnsureCollectionAsync(cancellationToken);
+        await _indexWriter.UpsertAsync(toIngest, cancellationToken);
         _logger.LogInformation("Ingested {Count} new drug knowledge chunks", toIngest.Count);
     }
 
     private static string BuildDrugKey(DrugCandidate candidate)
     {
-        var generic = candidate.GenericName?.Trim().ToLowerInvariant() ?? string.Empty;
-        var brand = candidate.BrandName?.Trim().ToLowerInvariant() ?? string.Empty;
-
-        if (string.IsNullOrEmpty(generic) && string.IsNullOrEmpty(brand))
-        {
-            return string.Empty;
-        }
-
-        return $"{generic}|{brand}";
+        return DrugChunks.BuildDrugKey(candidate.GenericName, candidate.BrandName);
     }
 
     private static IEnumerable<(DrugChunkType ChunkType, string? Text)> ExtractChunks(DrugCandidate candidate)

@@ -16,7 +16,7 @@ public class RagAnswerServiceTests
     {
         var embeddingService = new Mock<IEmbeddingService>();
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(0);
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
         var chatCompletionService = new Mock<IChatCompletionService>();
 
         var service = CreateService(embeddingService.Object, vectorStore.Object, chatCompletionService.Object);
@@ -41,8 +41,8 @@ public class RagAnswerServiceTests
             0.1);
 
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(1);
-        vectorStore.Setup(x => x.Search(questionVector, It.IsAny<int>())).Returns(new List<VectorSearchHit> { lowSimilarityHit });
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { lowSimilarityHit });
 
         var chatCompletionService = new Mock<IChatCompletionService>();
 
@@ -73,8 +73,8 @@ public class RagAnswerServiceTests
             0.8);
 
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(1);
-        vectorStore.Setup(x => x.Search(questionVector, It.IsAny<int>())).Returns(new List<VectorSearchHit> { hit });
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { hit });
 
         var chatCompletionService = new Mock<IChatCompletionService>();
         chatCompletionService
@@ -103,8 +103,8 @@ public class RagAnswerServiceTests
             0.9);
 
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(1);
-        vectorStore.Setup(x => x.Search(questionVector, It.IsAny<int>())).Returns(new List<VectorSearchHit> { hit });
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { hit });
 
         var chatCompletionService = new Mock<IChatCompletionService>();
         chatCompletionService.Setup(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(string.Empty);
@@ -130,9 +130,8 @@ public class RagAnswerServiceTests
             new DrugEmbedding { BrandName = "AtThreshold", ChunkType = DrugChunkType.Purpose, ChunkText = "relevant" }, 0.35);
 
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(2);
-        vectorStore.Setup(x => x.Search(questionVector, It.IsAny<int>()))
-            .Returns(new List<VectorSearchHit> { belowThreshold, atThreshold });
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(2);
+        vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { belowThreshold, atThreshold });
 
         var chatCompletionService = new Mock<IChatCompletionService>();
         chatCompletionService.Setup(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("answer");

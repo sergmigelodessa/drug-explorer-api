@@ -4,10 +4,7 @@ namespace DrugExplorer.Application.Interfaces;
 
 public interface IVectorStore
 {
-    int Count { get; }
+    Task<int> CountAsync(CancellationToken cancellationToken = default);
 
-    // Reloads the in-memory cache from persistence; call after startup and after new embeddings are ingested.
-    Task ReloadAsync(CancellationToken cancellationToken = default);
-
-    IReadOnlyList<VectorSearchHit> Search(float[] queryVector, int topK);
+    Task<IReadOnlyList<VectorSearchHit>> SearchAsync(float[] queryVector, int topK, CancellationToken cancellationToken = default);
 }

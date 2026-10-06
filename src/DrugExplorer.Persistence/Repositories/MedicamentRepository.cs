@@ -55,6 +55,19 @@ public class MedicamentRepo : IMedicamentRepository
             .ToDictionaryAsync(item => item.GenericName, item => item.Count, cancellationToken);
     }
 
+    public async Task<List<Drug>> GetPageAsync(
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Drugs
+            .AsNoTracking()
+            .OrderBy(drug => drug.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<int> AddRangeAsync(
         IEnumerable<Drug> drugs,
         CancellationToken cancellationToken = default)

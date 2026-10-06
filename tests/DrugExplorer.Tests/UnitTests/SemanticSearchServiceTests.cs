@@ -16,7 +16,7 @@ public class SemanticSearchServiceTests
     {
         var embeddingService = new Mock<IEmbeddingService>();
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(0);
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
 
         var service = CreateService(embeddingService.Object, vectorStore.Object);
 
@@ -44,9 +44,8 @@ public class SemanticSearchServiceTests
             0.7);
 
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(3);
-        vectorStore.Setup(x => x.Search(queryVector, It.IsAny<int>()))
-            .Returns(new List<VectorSearchHit> { lowHit, highHit, otherDrugHit });
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(3);
+        vectorStore.Setup(x => x.SearchAsync(queryVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { lowHit, highHit, otherDrugHit });
 
         var service = CreateService(embeddingService.Object, vectorStore.Object);
 
@@ -67,14 +66,14 @@ public class SemanticSearchServiceTests
         embeddingService.Setup(x => x.EmbedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(queryVector);
 
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(1);
-        vectorStore.Setup(x => x.Search(queryVector, 15)).Returns(new List<VectorSearchHit>());
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        vectorStore.Setup(x => x.SearchAsync(queryVector, 15, It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit>());
 
         var service = CreateService(embeddingService.Object, vectorStore.Object);
 
         await service.SearchAsync("aspirin", topK: 3);
 
-        vectorStore.Verify(x => x.Search(queryVector, 15), Times.Once);
+        vectorStore.Verify(x => x.SearchAsync(queryVector, 15, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [TestMethod]
@@ -91,8 +90,8 @@ public class SemanticSearchServiceTests
             .ToList();
 
         var vectorStore = new Mock<IVectorStore>();
-        vectorStore.Setup(x => x.Count).Returns(5);
-        vectorStore.Setup(x => x.Search(queryVector, It.IsAny<int>())).Returns(hits);
+        vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(5);
+        vectorStore.Setup(x => x.SearchAsync(queryVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(hits);
 
         var service = CreateService(embeddingService.Object, vectorStore.Object);
 

@@ -12,5 +12,8 @@ public interface IMedicamentRepository
 
     Task<Dictionary<string, int>> GetGenericNameCountsAsync(CancellationToken cancellationToken = default);
 
+    // Stable Id-ordered paging for full-table scans.
+    Task<List<Drug>> GetPageAsync(int skip, int take, CancellationToken cancellationToken = default);
+
     Task<int> AddRangeAsync(IEnumerable<Drug> drugs, CancellationToken cancellationToken = default);
 }

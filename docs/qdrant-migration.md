@@ -2,31 +2,31 @@
 
 ## Current state
 
-- SQL Server stores `DrugEmbeddings`, including `EmbeddingJson` as JSON.
-- The API uses singleton `InMemoryVectorStore` and loads every embedding into RAM at startup.
-- New chunks trigger a full vector-store reload after ingestion.
+- SQL Server stores `Drugs` and `DrugEmbeddings`.
+- The API uses `QdrantVectorStore` (collection `drug_chunks`) for semantic search and RAG; `InMemoryVectorStore` is no longer registered.
+- New ingestion chunks are upserted to Qdrant; no full reload is needed.
+- `POST /api/drugs/build-vector-index` backfills Qdrant from the `Drugs` table.
 - Qdrant 1.19.1 is installed in WSL2 distribution `DrugExplorerUbuntu`.
 - The WSL2 virtual disk is stored at `D:\WSL\DrugExplorerUbuntu\ext4.vhdx`.
 - Qdrant API is available at `http://localhost:6333`.
-- Qdrant currently has no collections and is not used by the API.
 
 ## Migration plan
 
-- [ ] Define collection contract: name, 768 dimensions, `Cosine`, and payload fields `DrugKey`, `BrandName`, `GenericName`, `ChunkType`, `ChunkText`, and SQL `Id`.
-- [ ] Add configurable Qdrant URL, collection name, timeout, and optional API key to application settings.
-- [ ] Add a small Infrastructure HTTP client. Keep Qdrant types out of Domain and Application.
-- [ ] Introduce an application vector-search abstraction returning the existing `VectorSearchHit` shape or an equivalent domain model.
-- [ ] Create and validate the collection at startup; report incompatible vector size or distance clearly.
-- [ ] Add an idempotent batch backfill from SQL Server using deterministic point IDs based on `DrugEmbedding.Id`.
+- [x] Define collection contract: name, 768 dimensions, `Cosine`, and payload fields `DrugKey`, `BrandName`, `GenericName`, `ChunkType`, `ChunkText` (point id is a deterministic GUID, not the SQL `Id`).
+- [x] Add configurable Qdrant URL, collection name, timeout, and optional API key to application settings.
+- [x] Add a small Infrastructure HTTP client. Keep Qdrant types out of Domain and Application.
+- [x] Introduce an application vector-search abstraction returning the existing `VectorSearchHit` shape or an equivalent domain model.
+- [x] Create and validate the collection at startup; report incompatible vector size or distance clearly.
+- [x] Add an idempotent backfill from SQL Server using deterministic point IDs (`VectorIndexBuildService`; processes one chunk at a time).
 - [ ] Add a verification report for SQL/Qdrant counts, malformed embeddings, dimensions, and sample similarity queries.
-- [ ] Change `RagAnswerService` to query Qdrant with the existing top-five and `0.35` threshold behavior.
-- [ ] Change `SemanticSearchService` to query Qdrant while preserving grouping by `DrugKey` and the public response contract.
-- [ ] Upsert new ingestion chunks to Qdrant and remove the full reload dependency.
+- [x] Change `RagAnswerService` to query Qdrant with the existing top-five and `0.35` threshold behavior.
+- [x] Change `SemanticSearchService` to query Qdrant while preserving grouping by `DrugKey` and the public response contract.
+- [x] Upsert new ingestion chunks to Qdrant and remove the full reload dependency.
 - [ ] Add retry, timeout, and error mapping; decide whether rollout uses fallback or fail-closed behavior.
 - [ ] Add integration tests for collection creation, upsert, search, payload mapping, idempotency, and unavailable Qdrant.
 - [ ] Run both implementations in shadow mode and compare representative top-K results.
-- [ ] Switch DI from `InMemoryVectorStore` to Qdrant.
-- [ ] Remove startup reload and in-memory implementation only after verification.
+- [x] Switch DI from `InMemoryVectorStore` to Qdrant.
+- [x] Remove startup reload (the `InMemoryVectorStore` class is kept for now).
 - [ ] Document Qdrant backup, restore, and long-term data ownership.
 
 ## Acceptance criteria
