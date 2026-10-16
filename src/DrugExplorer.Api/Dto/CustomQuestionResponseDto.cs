@@ -1,6 +1,6 @@
 namespace DrugExplorer.Api.Dto;
 
-public class AskResponseDto
+public class CustomQuestionResponseDto
 {
     public string Answer { get; set; } = string.Empty;
 

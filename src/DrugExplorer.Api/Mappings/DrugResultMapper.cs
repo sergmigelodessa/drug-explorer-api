@@ -30,9 +30,9 @@ public class DrugResultMapper
         };
     }
 
-    public AskResponseDto MapRagAnswer(RagAnswer answer)
+    public CustomQuestionResponseDto MapRagAnswer(RagAnswer answer)
     {
-        return new AskResponseDto
+        return new CustomQuestionResponseDto
         {
             Answer = answer.Answer,
             Grounded = answer.Grounded,

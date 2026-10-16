@@ -5,7 +5,7 @@ using DrugExplorer.Domain.Models;
 
 namespace DrugExplorer.Application.Services;
 
-public class RagAnswerService : IRagAnswerService
+public class RagCustomQuestionService : Interfaces.IRagCustomQuestionService
 {
     private const int MAX_CONTEXT_CHUNKS = 5;
     private const double MIN_SIMILARITY_THRESHOLD = 0.35;
@@ -15,22 +15,22 @@ public class RagAnswerService : IRagAnswerService
 
     private readonly IEmbeddingService _embeddingService;
     private readonly IVectorStore _vectorStore;
-    private readonly IChatCompletionService _chatCompletionService;
-    private readonly ILogger<RagAnswerService> _logger;
+    private readonly IAIModelClientService _aIModelClientService;
+    private readonly ILogger<RagCustomQuestionService> _logger;
 
-    public RagAnswerService(
+    public RagCustomQuestionService(
         IEmbeddingService embeddingService,
         IVectorStore vectorStore,
-        IChatCompletionService chatCompletionService,
-        ILogger<RagAnswerService> logger)
+        IAIModelClientService aIModelClientService,
+        ILogger<RagCustomQuestionService> logger)
     {
         _embeddingService = embeddingService;
         _vectorStore = vectorStore;
-        _chatCompletionService = chatCompletionService;
+        _aIModelClientService = aIModelClientService;
         _logger = logger;
     }
 
-    public async Task<RagAnswer> AskAsync(string question, CancellationToken cancellationToken = default)
+    public async Task<RagAnswer> DoRequestAsync(string question, CancellationToken cancellationToken = default)
     {
         if (await _vectorStore.CountAsync(cancellationToken) == 0)
         {
@@ -59,7 +59,7 @@ public class RagAnswerService : IRagAnswerService
             .ToList();
 
         var prompt = BuildPrompt(question, sources);
-        var answer = await _chatCompletionService.CompleteAsync(prompt, cancellationToken);
+        var answer = await _aIModelClientService.SendPrompt(prompt, cancellationToken);
 
         return new RagAnswer
         {

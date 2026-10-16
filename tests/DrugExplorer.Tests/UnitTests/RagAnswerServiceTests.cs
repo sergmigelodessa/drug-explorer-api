@@ -17,16 +17,16 @@ public class RagAnswerServiceTests
         var embeddingService = new Mock<IEmbeddingService>();
         var vectorStore = new Mock<IVectorStore>();
         vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        var chatCompletionService = new Mock<IChatCompletionService>();
+        var chatCompletionService = new Mock<IAIModelClientService>();
 
         var service = CreateService(embeddingService.Object, vectorStore.Object, chatCompletionService.Object);
 
-        var result = await service.AskAsync("What is aspirin used for?");
+        var result = await service.DoRequestAsync("What is aspirin used for?");
 
         Assert.IsFalse(result.Grounded);
         Assert.AreEqual(0, result.Sources.Count);
         embeddingService.Verify(x => x.EmbedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        chatCompletionService.Verify(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        chatCompletionService.Verify(x => x.SendPrompt(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [TestMethod]
@@ -44,14 +44,14 @@ public class RagAnswerServiceTests
         vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { lowSimilarityHit });
 
-        var chatCompletionService = new Mock<IChatCompletionService>();
+        var chatCompletionService = new Mock<IAIModelClientService>();
 
         var service = CreateService(embeddingService.Object, vectorStore.Object, chatCompletionService.Object);
 
-        var result = await service.AskAsync("question");
+        var result = await service.DoRequestAsync("question");
 
         Assert.IsFalse(result.Grounded);
-        chatCompletionService.Verify(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        chatCompletionService.Verify(x => x.SendPrompt(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [TestMethod]
@@ -76,14 +76,14 @@ public class RagAnswerServiceTests
         vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { hit });
 
-        var chatCompletionService = new Mock<IChatCompletionService>();
+        var chatCompletionService = new Mock<IAIModelClientService>();
         chatCompletionService
-            .Setup(x => x.CompleteAsync(It.Is<string>(p => p.Contains("Used for pain relief")), It.IsAny<CancellationToken>()))
+            .Setup(x => x.SendPrompt(It.Is<string>(p => p.Contains("Used for pain relief")), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Aspirin is used for pain relief. [1] This is not medical advice.");
 
         var service = CreateService(embeddingService.Object, vectorStore.Object, chatCompletionService.Object);
 
-        var result = await service.AskAsync("What is aspirin used for?");
+        var result = await service.DoRequestAsync("What is aspirin used for?");
 
         Assert.IsTrue(result.Grounded);
         Assert.AreEqual(1, result.Sources.Count);
@@ -106,12 +106,12 @@ public class RagAnswerServiceTests
         vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { hit });
 
-        var chatCompletionService = new Mock<IChatCompletionService>();
-        chatCompletionService.Setup(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(string.Empty);
+        var chatCompletionService = new Mock<IAIModelClientService>();
+        chatCompletionService.Setup(x => x.SendPrompt(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(string.Empty);
 
         var service = CreateService(embeddingService.Object, vectorStore.Object, chatCompletionService.Object);
 
-        var result = await service.AskAsync("question");
+        var result = await service.DoRequestAsync("question");
 
         Assert.IsTrue(result.Grounded);
         StringAssert.Contains(result.Answer, "couldn't find reliable information");
@@ -133,22 +133,22 @@ public class RagAnswerServiceTests
         vectorStore.Setup(x => x.CountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(2);
         vectorStore.Setup(x => x.SearchAsync(questionVector, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(new List<VectorSearchHit> { belowThreshold, atThreshold });
 
-        var chatCompletionService = new Mock<IChatCompletionService>();
-        chatCompletionService.Setup(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("answer");
+        var chatCompletionService = new Mock<IAIModelClientService>();
+        chatCompletionService.Setup(x => x.SendPrompt(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("answer");
 
         var service = CreateService(embeddingService.Object, vectorStore.Object, chatCompletionService.Object);
 
-        var result = await service.AskAsync("question");
+        var result = await service.DoRequestAsync("question");
 
         Assert.AreEqual(1, result.Sources.Count);
         Assert.AreEqual("AtThreshold", result.Sources[0].BrandName);
     }
 
-    private static RagAnswerService CreateService(
+    private static Application.Services.RagCustomQuestionService CreateService(
         IEmbeddingService embeddingService,
         IVectorStore vectorStore,
-        IChatCompletionService chatCompletionService)
+        IAIModelClientService chatCompletionService)
     {
-        return new RagAnswerService(embeddingService, vectorStore, chatCompletionService, NullLogger<RagAnswerService>.Instance);
+        return new Application.Services.RagCustomQuestionService(embeddingService, vectorStore, chatCompletionService, NullLogger<Application.Services.RagCustomQuestionService>.Instance);
     }
 }

@@ -68,12 +68,12 @@ builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingClient>(client 
     ollamaEmbeddingModel,
     sp.GetRequiredService<ILogger<OllamaEmbeddingClient>>()));
 
-builder.Services.AddHttpClient<IChatCompletionService, OllamaChatClient>(client =>
+builder.Services.AddHttpClient<IAIModelClientService, OllamaChatClient>(client =>
 {
     client.BaseAddress = new Uri(ollamaBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(180);
 })
-.AddTypedClient<IChatCompletionService>((httpClient, sp) => new OllamaChatClient(
+.AddTypedClient<IAIModelClientService>((httpClient, sp) => new OllamaChatClient(
     httpClient,
     ollamaChatModel,
     sp.GetRequiredService<ILogger<OllamaChatClient>>()));
@@ -106,7 +106,7 @@ builder.Services.AddScoped<IDrugKnowledgeIngestionService, DrugKnowledgeIngestio
 builder.Services.AddScoped<IMedicamentSeedService, MedicamentSeedService>();
 builder.Services.AddScoped<IVectorIndexBuildService, VectorIndexBuildService>();
 builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>();
-builder.Services.AddScoped<IRagAnswerService, RagAnswerService>();
+builder.Services.AddScoped<IRagCustomQuestionService, RagCustomQuestionService>();
 builder.Services.AddScoped<DrugResultMapper>();
 
 var app = builder.Build();

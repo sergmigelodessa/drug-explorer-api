@@ -1,6 +1,7 @@
 using DrugExplorer.Api.Dto;
 using DrugExplorer.Api.Mappings;
 using DrugExplorer.Application.Interfaces;
+using DrugExplorer.Application.Services;
 using DrugExplorer.Domain.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,7 +13,7 @@ public class DrugsController : ControllerBase
 {
     private readonly IDrugSearchService _searchService;
     private readonly ISemanticSearchService _semanticSearchService;
-    private readonly IRagAnswerService _ragAnswerService;
+    private readonly IRagCustomQuestionService _ragCustomQuestionService;
     private readonly IMedicamentSeedService _medicamentSeedService;
     private readonly IVectorIndexBuildService _vectorIndexBuildService;
     private readonly DrugResultMapper _mapper;
@@ -21,7 +22,7 @@ public class DrugsController : ControllerBase
     public DrugsController(
         IDrugSearchService searchService,
         ISemanticSearchService semanticSearchService,
-        IRagAnswerService ragAnswerService,
+        IRagCustomQuestionService ragCustomQuestionService,
         IMedicamentSeedService medicamentSeedService,
         IVectorIndexBuildService vectorIndexBuildService,
         DrugResultMapper mapper,
@@ -29,7 +30,7 @@ public class DrugsController : ControllerBase
     {
         _searchService = searchService;
         _semanticSearchService = semanticSearchService;
-        _ragAnswerService = ragAnswerService;
+        _ragCustomQuestionService = ragCustomQuestionService;
         _medicamentSeedService = medicamentSeedService;
         _vectorIndexBuildService = vectorIndexBuildService;
         _mapper = mapper;
@@ -97,8 +98,8 @@ public class DrugsController : ControllerBase
     /// <param name="request">The question to ask</param>
     /// <response code="200">Answer generated (may be ungrounded if no relevant context was found)</response>
     /// <response code="400">Invalid input</response>
-    [HttpPost("ask")]
-    public async Task<ActionResult<AskResponseDto>> Ask([FromBody] AskRequestDto request)
+    [HttpPost("custom-question")]
+    public async Task<ActionResult<CustomQuestionResponseDto>> CustomQuestion([FromBody] CustomQuestionRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(request.Question))
             throw new ArgumentException("Question is required and cannot be empty", nameof(request));
@@ -109,7 +110,7 @@ public class DrugsController : ControllerBase
         if (request.Question.Length > 512)
             throw new ArgumentException("Question cannot exceed 512 characters", nameof(request));
 
-        var answer = await _ragAnswerService.AskAsync(request.Question);
+        var answer = await _ragCustomQuestionService.DoRequestAsync(request.Question);
         var response = _mapper.MapRagAnswer(answer);
 
         return Ok(response);
@@ -122,7 +123,7 @@ public class DrugsController : ControllerBase
     /// <response code="200">Seeding completed (may stop early if OpenFDA runs out of matches)</response>
     /// <response code="400">Invalid input</response>
     [HttpPost("seed-medicaments")]
-    public async Task<ActionResult<MedicamentSeedResponseDto>> SeedMedicaments(
+    public async Task<ActionResult<DrugsSeedResponseDto>> SeedMedicaments(
         [FromQuery] int targetCount = 1000,
         CancellationToken cancellationToken = default)
     {
@@ -133,7 +134,7 @@ public class DrugsController : ControllerBase
 
         var result = await _medicamentSeedService.SeedAsync(targetCount, cancellationToken);
 
-        var response = new MedicamentSeedResponseDto
+        var response = new DrugsSeedResponseDto
         {
             TotalInserted = result.TotalInserted,
             TotalSkippedDuplicates = result.TotalSkippedDuplicates,

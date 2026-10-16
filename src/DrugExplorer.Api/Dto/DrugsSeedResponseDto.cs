@@ -1,6 +1,6 @@
 namespace DrugExplorer.Api.Dto;
 
-public class MedicamentSeedResponseDto
+public class DrugsSeedResponseDto
 {
     public int TotalInserted { get; set; }
 

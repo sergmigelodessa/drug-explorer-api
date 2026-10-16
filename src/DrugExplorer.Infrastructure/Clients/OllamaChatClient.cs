@@ -6,7 +6,7 @@ using DrugExplorer.Domain.Exceptions;
 
 namespace DrugExplorer.Infrastructure.Clients;
 
-public class OllamaChatClient : IChatCompletionService
+public class OllamaChatClient : IAIModelClientService
 {
     private readonly HttpClient _httpClient;
     private readonly string _model;
@@ -19,7 +19,7 @@ public class OllamaChatClient : IChatCompletionService
         _logger = logger;
     }
 
-    public async Task<string> CompleteAsync(string prompt, CancellationToken cancellationToken = default)
+    public async Task<string> SendPrompt(string prompt, CancellationToken cancellationToken = default)
     {
         try
         {
