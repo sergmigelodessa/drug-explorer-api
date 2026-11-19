@@ -127,7 +127,7 @@ If you change the embedding model, change `Qdrant:VectorSize` and use a new coll
 
 ## Running locally
 
-Prerequisites: .NET 8 SDK, SQL Server, Ollama, and Qdrant.
+Prerequisites: .NET 10 SDK, SQL Server, Ollama, and Qdrant.
 
 1. **Qdrant** (WSL distro `DrugExplorerUbuntu`, binary in `/opt/qdrant`). Run from any PowerShell window and keep it open:
    ```powershell
